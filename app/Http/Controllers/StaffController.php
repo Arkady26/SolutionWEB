@@ -1,0 +1,369 @@
+<?php namespace App\Http\Controllers;
+
+use App\Http\Controllers\controller;
+use App\Models\Staff;
+use App\Models\Countries;
+use App\Models\StaffType;
+use App\Models\Cities;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator as Paginator;
+use Validator, Input, Redirect;
+
+class StaffController extends Controller
+{
+
+    protected $layout = "layouts.main";
+    protected $data = array();
+    public $module = 'staffs';
+    static $per_page = '10';
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->model = new Staff();
+
+        $this->info = $this->model->makeInfo($this->module);
+        $this->access = $this->model->validAccess($this->info['id']);
+        $this->access['is_detail'] = 0;
+        $this->data = array(
+            'pageTitle' => $this->info['title'],
+            'pageNote' => $this->info['note'],
+            'pageModule' => 'staffs',
+            'pageUrl' => url('staffs'),
+            'return' => self::returnUrl()
+        );
+
+    }
+
+    public function index()
+    {
+        if ($this->access['is_view'] == 0)
+            return Redirect::to('dashboard')->with('messagetext', \Lang::get('core.note_restric'))->with('msgstatus', 'error');
+
+        $this->data['access'] = $this->access;
+        $this->data['items'] = Staff::all();
+        $this->data['staff_types'] = StaffType::all();
+        $this->data['countries'] = Countries::all();
+        $this->data['cities'] = Cities::all();
+        return view('staffs.index', $this->data);
+    }
+
+    public function edit(Request $request)
+    {
+
+        $data['staff'] = Staff::find($request->id);
+        $data['staff_types'] = StaffType::all();
+        $data['countries'] = Countries::all();
+        $data['cities'] = Cities::all();
+        $view = view('staffs.form', $data)->render();
+        return response()->json(['status' => 'success', 'view' => $view]);
+
+    }
+
+    function update(Request $request, $id)
+    {
+        $request->validate([
+            'stafftypeID' => 'required',
+            'email' => 'required',
+            'countryID' => 'required',
+            'cityID' => 'required',
+            'status' => 'required',
+        ]);
+
+        $ticket = Staff::where('staffID', $id)->first();
+        $request['airlinesID'] = json_encode($request->airlinesID);
+        $ticket->update($request->all());
+        return response()->json(['status' => 'success', 'message' => __('core.note_success')]);
+    }
+
+    function store(Request $request)
+    {
+        $request->validate([
+            'stafftypeID' => 'required',
+            'email' => 'required',
+            'countryID' => 'required',
+            'cityID' => 'required',
+            'status' => 'required',
+        ]);
+
+        Staff::create($request->all());
+        return response()->json(['status' => 'success', 'message' => __('core.note_success')]);
+    }
+
+    public function getIndex()
+  	{
+
+  		if($this->access['is_view'] ==0)
+  			return Redirect::to('dashboard')->with('messagetext',\Lang::get('core.note_restric'))->with('msgstatus','error');
+      $this->data['access']		= $this->access;
+      $this->data['items'] = Staff::all();
+
+      $this->data['tableGrid'] 	= $this->info['config']['grid'];
+      $this->data['tableForm'] 	= $this->info['config']['forms'];
+      $this->data['colspan'] 		= \App\Library\SiteHelpers::viewColSpan($this->info['config']['grid']);
+      // Group users permission
+      $this->data['access']		= $this->access;
+      $this->data['stafftypes'] = StaffType::all();
+      // Detail from master if any
+      $this->data['setting'] 		= $this->info['setting'];
+
+      // Master detail link if any
+      $this->data['subgrid']	= (isset($this->info['config']['subgrid']) ? $this->info['config']['subgrid'] : array());
+  		return view('staffs.index',$this->data);
+  	}
+
+    public function postData( Request $request)
+  	{
+  		$sort = (!is_null($request->input('sort')) ? $request->input('sort') : $this->info['setting']['orderby']);
+  		$order = (!is_null($request->input('order')) ? $request->input('order') : $this->info['setting']['ordertype']);
+  		// End Filter sort and order for query
+  		// Filter Search for query
+  		$filter = '';
+      $this->data['stafftypes'] = StaffType::all();
+      $this->data['countries'] = Countries::all();
+      $this->data['cities'] = Cities::all();
+  		// $this->data['param']		= $params;
+  		$this->data['rowData']		= Staff::all();
+  		// Grid Configuration
+  		$this->data['tableGrid'] 	= $this->info['config']['grid'];
+  		$this->data['tableForm'] 	= $this->info['config']['forms'];
+  		$this->data['colspan'] 		= \App\Library\SiteHelpers::viewColSpan($this->info['config']['grid']);
+  		// Group users permission
+  		$this->data['access']		= $this->access;
+  		// Detail from master if any
+  		$this->data['setting'] 		= $this->info['setting'];
+
+  		// Master detail link if any
+  		$this->data['subgrid']	= (isset($this->info['config']['subgrid']) ? $this->info['config']['subgrid'] : array());
+  		// Render into template
+  		return view('staffs.table',$this->data);
+
+      $this->data['stafftypes'] = Airlines::all();
+  	}
+
+    function getUpdate(Request $request, $id = null)
+  	{
+
+  		if($id =='')
+  		{
+  			if($this->access['is_add'] ==0 )
+  			return Redirect::to('dashboard')->with('messagetext',\Lang::get('core.note_restric'))->with('msgstatus','error');
+  		}
+
+  		if($id !='')
+  		{
+  			if($this->access['is_edit'] ==0 )
+  			return Redirect::to('dashboard')->with('messagetext',\Lang::get('core.note_restric'))->with('msgstatus','error');
+  		}
+
+  		$row = $this->model->find($id);
+  		if($row)
+  		{
+  			$this->data['row'] 		=  $row;
+  		} else {
+  			$this->data['row'] 		= $this->model->getColumnTable('staffs');
+  		}
+  		$this->data['setting'] 		= $this->info['setting'];
+  		$this->data['fields'] 		=  \App\Library\AjaxHelpers::fieldLang($this->info['config']['forms']);
+
+  		$this->data['id'] = $id;
+
+  		return view('staffs.form',$this->data);
+  	}
+
+  	public function getShow( Request $request , $id = null)
+  	{
+
+  		if($this->access['is_detail'] ==0)
+  			return Redirect::to('dashboard')
+  				->with('messagetext', \Lang::get('core.note_restric'))->with('msgstatus','error');
+
+  		$row = $this->model->getRow($id);
+  		if($row)
+  		{
+  			$this->data['row'] =  $row;
+
+  			$this->data['id'] = $id;
+  			$this->data['access']		= $this->access;
+  			$this->data['setting'] 		= $this->info['setting'];
+  			$this->data['fields'] 		= \App\Library\AjaxHelpers::fieldLang($this->info['config']['grid']);
+  			$this->data['subgrid']		= (isset($this->info['config']['subgrid']) ? $this->info['config']['subgrid'] : array());
+  			$this->data['prevnext'] = $this->model->prevNext($id);
+
+  			$print = (!is_null($request->input('print')) ? 'true' : 'false' ) ;
+  			if($print =='true')
+  			{
+  				$data['html'] = view('staffs.view', $this->data)->render();
+  				return view('layouts.blank',$data);
+  			} else {
+  				return view('staffs.view',$this->data);
+  			}
+
+  		} else {
+
+  			return response()->json(array(
+  				'status'=>'error',
+  				'message'=> \Lang::get('core.note_error')
+  			));
+  		}
+  	}
+
+
+  	function postCopy( Request $request)
+  	{
+
+  	    foreach(\DB::select("SHOW COLUMNS FROM staffs ") as $column)
+          {
+  			if( $column->Field != 'staffID')
+  				$columns[] = $column->Field;
+          }
+  		if(count($request->input('ids')) >=1)
+  		{
+
+  			$toCopy = implode(",",$request->input('ids'));
+
+
+  			$sql = "INSERT INTO staffs (".implode(",", $columns).") ";
+  			$sql .= " SELECT ".implode(",", $columns)." FROM staffs WHERE staffID IN (".$toCopy.")";
+  			\DB::insert($sql);
+  			return response()->json(array(
+  				'status'=>'success',
+  				'message'=> \Lang::get('core.note_success')
+  			));
+
+  		} else {
+  			return response()->json(array(
+  				'status'=>'success',
+  				'message'=> \Lang::get('core.note_selectrow')
+  			));
+  		}
+
+
+  	}
+
+  	function postSave( Request $request, $id =0)
+  	{
+
+  		$rules = $this->validateForm();
+  		$validator = Validator::make($request->all(), $rules);
+  		if ($validator->passes()) {
+  			$data = $this->validatePost('staffs');
+
+  			$id = $this->model->insertRow($data , $request->input('staffID'));
+
+  			return response()->json(array(
+  				'status'=>'success',
+  				'message'=> \Lang::get('core.note_success')
+  				));
+
+  		} else {
+
+  			$message = $this->validateListError(  $validator->getMessageBag()->toArray() );
+  			return response()->json(array(
+  				'message'	=> $message,
+  				'status'	=> 'error'
+  			));
+  		}
+
+  	}
+
+  	public function postDelete( Request $request)
+  	{
+
+  		if($this->access['is_remove'] ==0) {
+  			return response()->json(array(
+  				'status'=>'error',
+  				'message'=> \Lang::get('core.note_restric')
+  			));
+  			die;
+
+  		}
+  		// delete multipe rows
+  		if(count($request->input('ids')) >=1)
+  		{
+  			$this->model->destroy($request->input('ids'));
+
+  			return response()->json(array(
+  				'status'=>'success',
+  				'message'=> \Lang::get('core.note_success_delete')
+  			));
+  		} else {
+  			return response()->json(array(
+  				'status'=>'error',
+  				'message'=> \Lang::get('core.note_error')
+  			));
+
+  		}
+
+  	}
+
+  	public static function display( )
+  	{
+  		$mode  = isset($_GET['view']) ? 'view' : 'default' ;
+  		$model  = new Suppliers();
+  		$info = $model::makeInfo('staffs');
+
+  		$data = array(
+  			'pageTitle'	=> 	$info['title'],
+  			'pageNote'	=>  $info['note']
+
+  		);
+
+  		if($mode == 'view')
+  		{
+  			$id = $_GET['view'];
+  			$row = $model::getRow($id);
+  			if($row)
+  			{
+  				$data['row'] =  $row;
+  				$data['fields'] 		=  \App\Library\SiteHelpers::fieldLang($info['config']['grid']);
+  				$data['id'] = $id;
+  				return view('staffs.public.view',$data);
+  			}
+
+  		} else {
+
+  			$page = isset($_GET['page']) ? $_GET['page'] : 1;
+  			$params = array(
+  				'page'		=> $page ,
+  				'limit'		=>  (isset($_GET['rows']) ? filter_var($_GET['rows'],FILTER_VALIDATE_INT) : 10 ) ,
+  				'sort'		=> 'staffID' ,
+  				'order'		=> 'asc',
+  				'params'	=> '',
+  				'global'	=> 1
+  			);
+
+  			$result = $model::getRows( $params );
+  			$data['tableGrid'] 	= $info['config']['grid'];
+  			$data['rowData'] 	= $result['rows'];
+
+  			$page = $page >= 1 && filter_var($page, FILTER_VALIDATE_INT) !== false ? $page : 1;
+  			$pagination = new Paginator($result['rows'], $result['total'], $params['limit']);
+  			$pagination->setPath('');
+  			$data['i']			= ($page * $params['limit'])- $params['limit'];
+  			$data['pagination'] = $pagination;
+  			return view('staffs.public.index',$data);
+  		}
+
+
+  	}
+
+  	function postSavepublic( Request $request)
+  	{
+
+  		$rules = $this->validateForm();
+  		$validator = Validator::make($request->all(), $rules);
+  		if ($validator->passes()) {
+  			$data = $this->validatePost('staffs');
+  			 $this->model->insertRow($data , $request->input('staffID'));
+  			return  Redirect::back()->with('messagetext','<p class="alert alert-success">'.\Lang::get('core.note_success').'</p>')->with('msgstatus','success');
+  		} else {
+
+  			return  Redirect::back()->with('messagetext','<p class="alert alert-danger">'.\Lang::get('core.note_error').'</p>')->with('msgstatus','error')
+  			->withErrors($validator)->withInput();
+
+  		}
+
+  	}
+
+}
